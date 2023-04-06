@@ -1,0 +1,223 @@
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>簡単顔タイプ診断</title>
+    <script src="https://obniz.com/js/jquery-3.2.1.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.min.js"></script>
+    <script src="https://unpkg.com/ml5@latest/dist/ml5.min.js"></script>
+    <style></style>
+  </head>
+  <body>
+    <header><h1>簡単顔タイプ診断</h1></header>
+    <main>
+      <p>正面を向いて「診断」ボタンを押してください。</p>
+      <button id="btn">診断</button>
+      <p id="result"></p>
+    </main>
+    <footer>
+      <div>
+        <h1>参考にしたサイト</h1>
+        <h2>本サイトで分類する顔タイプ</h2>
+        <p>
+          <a href="https://i-voce.jp/feed/958317/">【無料でよく当たる】顔タイプ診断 | セルフチェックで似合うメイク＆コスメを見つけよう【診断】｜美容メディアVOCE（ヴォーチェ）</a><br>
+        </p>
+        
+        <h2>診断基準</h2>
+        <p>  
+          横長・縦長<br>
+          <a href="https://www.meikocosmetics.co.jp/beautycolumn/facial-type/">自分の顔の形がわかる！顔型診断で5タイプの顔型からぴったり判定 | Beauty Column 美容コラム | MEIKO</a><br>
+          遠心・求心<br>
+          <a href="https://www.kao.com/jp/corporate/news/rd/2021/20210127-002/">花王 | 日本人女性の「平均顔」と印象による顔の特徴を解析　個性や美の多様性を尊重するメイクアップ提案へ</a>
+        </p>
+      </div>
+      
+    </footer>
+
+    <script>
+      // 参考：https://i-voce.jp/feed/958317/
+      /*
+      「カジュアル＆キュート」横長×遠心
+      「パワフル＆キュート」横長×求心
+      「フェミニン＆クラシック」縦長×遠心
+      「スタイリッシュ＆エレガント」縦長×求心
+      */
+      let facemesh;
+      let video;
+      let predictions = [];
+      let point = [];
+
+      function setup() {
+        createCanvas(640, 480);
+        video = createCapture(VIDEO);
+        video.size(width, height);
+
+        facemesh = ml5.facemesh(video, modelReady);
+
+        // This sets up an event that fills the global variable "predictions"
+        // with an array every time new predictions are made
+        facemesh.on("predict", (results) => {
+          predictions = results;
+        });
+
+        // Hide the video element, and just show the canvas
+        video.hide();
+      }
+
+      function modelReady() {
+        console.log("Model ready!");
+      }
+
+      function draw() {
+        image(video, 0, 0, width, height);
+
+        // We can call both functions to draw all keypoints
+        drawKeypoints();
+      }
+
+      // A function to draw ellipses over the detected keypoints
+      function drawKeypoints() {
+        for (let i = 0; i < predictions.length; i += 1) {
+          const keypoints = predictions[i].scaledMesh;
+
+          // 顔の形
+          // 参考：https://www.meikocosmetics.co.jp/beautycolumn/facial-type/
+          const [x1, y1] = keypoints[9]; // 眉毛の高さ
+          const [x2, y2] = keypoints[13]; // 口
+          const [x3, y3] = keypoints[58]; // 右頬
+          const [x4, y4] = keypoints[288]; // 左頬
+
+          fill("#fd3e9e");
+          ellipse(x1, y1, 10, 10);
+          ellipse(x2, y2, 10, 10);
+          ellipse(x3, y3, 10, 10);
+          ellipse(x4, y4, 10, 10);
+
+          const distanceW = dist(x1, y1, x2, y2); // 縦幅
+          const distanceH = dist(x3, y3, x4, y4); // 横幅
+
+          if (distanceW >= distanceH) {
+            point[0] = 1; // 縦長は1で表す
+          } else {
+            point[0] = 0; // 横長は0で表す
+          }
+
+          // 遠心・求心
+          // 参考：https://www.kao.com/jp/corporate/news/rd/2021/20210127-002/
+          const [x5, y5] = keypoints[130]; // 右目尻
+          const [x6, y6] = keypoints[133]; // 右目頭
+          const [x7, y7] = keypoints[362]; // 左目頭
+          const [x8, y8] = keypoints[359]; // 左目尻
+
+          fill("#c966d6");
+          ellipse(x5, y5, 10, 10);
+          ellipse(x6, y6, 10, 10);
+          ellipse(x7, y7, 10, 10);
+          ellipse(x8, y8, 10, 10);
+
+          const distanceR = dist(x5, y5, x6, y6);
+          const distanceL = dist(x7, y7, x8, y8);
+          const distanceAve = (distanceR + distanceL) / 2;
+          const distanceC = dist(x6, y6, x7, y7);
+
+          if (distanceC <= distanceAve * 1.2) {
+            point[1] = 1; // 求心は1で表す
+          } else {
+            point[1] = 0; // 遠心は0で表す
+          }
+        }
+      }
+
+      // 結果を表示する関数
+      function judge() {
+        $("#btn").on("click", function () {
+          if (point[0] == 0) {
+            if (point[1] == 0) {
+              $("#result").html(
+                'あなたは横長×遠心「カジュアル＆キュート」です<br><a href="https://i-voce.jp/feed/958317/2/">解説はコチラ！</a>'
+              );
+            } else {
+              $("#result").html(
+                'あなたは横長×求心「パワフル＆キュート」です<br><a href="https://i-voce.jp/feed/958317/3/">解説はコチラ！</a>'
+              );
+            }
+          } else {
+            if (point[1] == 0) {
+              $("#result").html(
+                'あなたは縦長×遠心「フェミニン＆クラシック」です<br><a href="https://i-voce.jp/feed/958317/4/">解説はコチラ！</a>'
+              );
+            } else {
+              $("#result").html(
+                'あなたは縦長×求心「スタイリッシュ＆エレガント」です<br><a href="https://i-voce.jp/feed/958317/5/">解説はコチラ！</a>'
+              );
+            }
+          }
+          $("#btn").hide();
+        });
+      }
+
+      judge();
+    </script>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        text-align: center;
+      }
+      header {
+        background-color: #fd3e9e;
+        color: #fff;
+      }
+      main {
+        margin: 2rem;
+      }
+      h1 {
+        margin: 0;
+        padding: 0.5rem;
+        font-size: 2.5rem;
+      }
+      footer h1 {
+        font-size: 1.2rem;
+      }
+      footer h2 {
+        padding-top: 1.3rem;
+        padding-bottom: 0;
+        font-size: 1.1rem;
+      }
+      p {
+        font-size: 1.2rem;
+      }
+      footer p {
+        font-size: 1.1rem;
+      }
+      a {
+        color: #fd3e9e;
+      }
+      a:hover {
+        color: #c966d6;
+      }
+      a:visited {
+        color: #c966d6;
+      }
+      button {
+        margin: 2rem;
+        padding: 0 1.5rem;
+        border: 5px outset #fa84bb;
+        border-radius: 20px;
+        font-size: 100%;
+        background-color: #fd53a8;
+        color: #fff;
+      }
+      button:active {
+        border: 5px inset #fa84bb;
+        background-color: #f34b9f;
+        transition: 0.6s;
+        -webkit-transition: 0.6s;
+        -o-transition: 0.6s;
+        -moz-transition: 0.6s;
+      }
+      #result {
+        font-size: 1.5rem;
+      }
+    </style>
+  </body>
+</html>
